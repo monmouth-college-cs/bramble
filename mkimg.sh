@@ -70,5 +70,5 @@ fi
 echo "Unmounting $mount_boot $mount_root"
 umount $mount_boot $mount_root
 rm -rf $mount_boot $mount_root
-echo "All done!"
+echo "All done! Use 'dd bs=4M if=bramble.img of=/dev/<SDCARD>' to transfer to an SD card. Replace '<SDCARD>' with the device name."
 
