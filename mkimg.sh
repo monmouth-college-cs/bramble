@@ -35,7 +35,9 @@ sector_size=512 # Use `fdisk -l $imgname` to verify that 512 is correct
 disk_info="$(fdisk --bytes -lo Id,Start,Size $imgname)"
 
 #### Mount boot partition ####
-partition_info="$(grep '^ c' <<< \"$disk_info\")"
+#partition_info="$(grep '^ c' <<< \"$disk_info\")"
+partition_info=$(echo "$disk_info" | grep '^ c')
+
 
 partition_start=$(echo "$partition_info" | awk '{print $2}')
 partition_size=$(echo "$partition_info" | awk '{print $3}')
@@ -43,7 +45,8 @@ offset=$(($sector_size * $partition_start))
 echo "[Mount boot] Calculated offset of $offset, size of $partition_size, mounting boot image at $mount_boot"
 mount -o loop,offset=$offset,sizelimit=$partition_size $imgname $mount_boot
 
-partition_info="$(grep '^83' <<< \"$disk_info\")"
+#partition_info="$(grep '^83' <<< \"$disk_info\")"
+partition_info=$(echo "$disk_info" | grep '^83')
 partition_start=$(echo $partition_info | awk '{print $2}')
 partition_size=$(echo $partition_info | awk '{print $3}')
 offset=$(($sector_size * $partition_start))
