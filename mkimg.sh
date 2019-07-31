@@ -35,7 +35,6 @@ sector_size=512 # Use `fdisk -l $imgname` to verify that 512 is correct
 disk_info="$(fdisk --bytes -lo Id,Start,Size $imgname)"
 
 #### Mount boot partition ####
-#partition_info="$(grep '^ c' <<< \"$disk_info\")"
 partition_info=$(echo "$disk_info" | grep '^ c')
 
 
@@ -45,7 +44,6 @@ offset=$(($sector_size * $partition_start))
 echo "[Mount boot] Calculated offset of $offset, size of $partition_size, mounting boot image at $mount_boot"
 mount -o loop,offset=$offset,sizelimit=$partition_size $imgname $mount_boot
 
-#partition_info="$(grep '^83' <<< \"$disk_info\")"
 partition_info=$(echo "$disk_info" | grep '^83')
 partition_start=$(echo $partition_info | awk '{print $2}')
 partition_size=$(echo $partition_info | awk '{print $3}')
@@ -63,15 +61,14 @@ touch ${mount_boot}/ssh
 # mkdir -p ${mount_root}/home/pi/firmware
 # cp $firmware ${mount_root}/home/pi/firmware/firmware_update.zip
 
-# @TODO: use ssh-copy-id, take in keyfile argument
 ##### Copying SSH Keys #####
-# if [ -f "./authorized_keys" ]; then
-#     echo "Found local authorized_keys, copying to image."
-#     mkdir -p ${mount_root}/.ssh
-#     cat $keyfile >> ${mount_root}/.ssh/authorized_keys
-# else
-#     echo "No SSH keys found."
-# fi
+if [ "$1" != "" ]; then
+    echo "Setuping up SSH key file $1"
+    mkdir ${mount_root}/home/pi/.ssh
+    cp "$1" ${mount_root}/home/pi/.ssh/authorized_keys
+else
+    echo "No SSH key file given."
+fi
 
 ##### Unmounting #####
 echo "Unmounting $mount_boot $mount_root"
