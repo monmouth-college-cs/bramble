@@ -7,6 +7,13 @@ from paramiko.ssh_exception import AuthenticationException
 # Parameters
 hostname_prefix = 'bramble-pi'
 ip3 = '42' # ip addresses will be "x.x.{ip3}.{num}"
+nfs_dir = '/export/nfs'
+
+def service_cmd(cxn, service, cmd):
+  cxn.sudo(f"systemctl {cmd} {service}")
+
+def install(cxn, *pkg):
+  cxn.sudo(f"apt install {' '.join(pkg)} -y", hide='out')
 
 def file_append(cxn, filepath, data, use_sudo=False):
   cmd = f"tee -a {filepath} <<EOF \n{data}\nEOF"
@@ -64,6 +71,53 @@ def config_cluster_network(group, router, ip_prefix, hostfile_data, local_keyfil
     # TODO: Copy file to each pi as authorized keys
     reboot(c)
 
+def setup_nfs_client(cxn, master_ip):
+  cxn.sudo(f"umount {nfs_dir}")
+  cxn.sudo(f"mount {master_ip}:{nfs_dir} {nfs_dir}")
+
+  # Set fstab
+  cxn.sudo(f"sed -i '\|^{master_ip}:{nfs_dir}|d' /etc/fstab")
+  options="rw,noatime,nodiratime,async"
+  line = f"{master_ip}:{nfs_dir} {nfs_dir} nfs {options} 0 0"
+  file_append(cxn, '/etc/fstab', line, use_sudo=True)
+
+def setup_nfs_server(cxn, ip_prefix):
+  install(cxn, 'nfs-kernel-server', 'rpcbind')
+
+  # Need to add line in /etc/exports
+  # Replace the ip address range with * for open access
+  options = "rw,all_squash,insecure,async,no_subtree_check,anonuid=1000,anongid=1000"
+  export_line = f"{nfs_dir} {ip_prefix}.0/24({options})"
+
+  # First remove anything similar
+  cxn.sudo(f"sed -i '\|^{nfs_dir}|d' /etc/exports")
+
+  # Now add it
+  file_append(cxn, '/etc/exports', export_line, use_sudo=True)
+
+  cxn.sudo('exportfs -ra')
+  cxn.run('/sbin/showmount -e localhost')
+  service_cmd(cxn, 'rpcbind', 'enable')
+  service_cmd(cxn, 'nfs-kernel-server', 'enable')
+  service_cmd(cxn, 'nfs-common', 'enable')
+  service_cmd(cxn, 'rpcbind', 'start')
+  service_cmd(cxn, 'nfs-kernel-server', 'start')
+  service_cmd(cxn, 'nfs-common', 'start')
+
+def setup_nfs_all(cxn):
+  cxn.sudo('apt install nfs-common -y')
+  cxn.sudo(f"mkdir -p {nfs_dir}")
+  cxn.sudo(f"chown pi:pi {nfs_dir}")
+  cxn.sudo(f"chmod 755 {nfs_dir}")
+
+def setup_nfs(group, ip_prefix):
+  for c in group:
+    setup_nfs_all(c)
+  master = group[0]
+  setup_nfs_server(master, ip_prefix)
+  for c in group[1:]:
+    setup_nfs_client(c, master.host)
+
 def main():
   with open('initial_hosts.txt') as f:
     ips = [line.strip() for line in f]
@@ -82,13 +136,12 @@ def main():
 
   local_keyfile = None if len(sys.argv) == 1 else sys.argv[1]
 
-  config_cluster_network(bramble, router, ip_prefix, hostfile_data, local_keyfile)
+  #config_cluster_network(bramble, router, ip_prefix, hostfile_data, local_keyfile)
+  setup_nfs(bramble, ip_prefix)
+
 
 if __name__ == "__main__":
   main()
-
-def setup_nfs_client(cxn):
-  cxn.sudo('apt install nfs-common')
 
 # Optional argument is local filename of public key to use
 # Should not require a passphrase!
