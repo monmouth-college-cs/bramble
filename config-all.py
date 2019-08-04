@@ -9,14 +9,19 @@ hostname_prefix = 'bramble-pi'
 ip3 = '42' # ip addresses will be "x.x.{ip3}.{num}"
 nfs_dir = '/export/nfs'
 
+def set_freq_scaling(cxn, governor):
+  file_write(cxn, '/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor',
+             governor, append=False, use_sudo=True)
+
 def service_cmd(cxn, service, cmd):
   cxn.sudo(f"systemctl {cmd} {service}")
 
 def install(cxn, *pkg):
   cxn.sudo(f"apt install {' '.join(pkg)} -y", hide='out')
 
-def file_append(cxn, filepath, data, use_sudo=False):
-  cmd = f"tee -a {filepath} <<EOF \n{data}\nEOF"
+def file_write(cxn, filepath, data, append=True, use_sudo=False):
+  flags = "-a" if append else ""
+  cmd = f"tee {flags} {filepath} <<EOF \n{data}\nEOF"
   func = cxn.sudo if use_sudo else cxn.run
   func(cmd, hide='out')
 
@@ -44,7 +49,7 @@ static ip_address={ip_addr}/24
 static routers={router}
 static domain_name_servers={router} 8.8.8.8"""
   #cxn.sudo(f"cat >>/etc/dhcpcd.conf <<EOF \n{config_txt}\nEOF")
-  file_append(cxn, '/etc/dhcpcd.conf', config_txt, use_sudo=True)
+  file_write(cxn, '/etc/dhcpcd.conf', config_txt, append=True, use_sudo=True)
   print(f"{cxn.host} --> {ip_addr}")
 
 def set_hostname(cxn, hostname):
@@ -56,7 +61,7 @@ def setup_hostsfile(cxn, data):
 
   # Delete if already there
   cxn.sudo(f"sed -i '/{header}/,/{footer}/d' /etc/hosts")
-  file_append(cxn, '/etc/hosts', data, use_sudo=True)
+  file_write(cxn, '/etc/hosts', data, append=True, use_sudo=True)
 
 def config_cluster_network(group, router, ip_prefix, hostfile_data, local_keyfile):
   os.makedirs('./keyfiles', exist_ok=True)
@@ -86,7 +91,7 @@ def setup_nfs_client(cxn, master_ip):
   cxn.sudo(f"sed -i '\|^{master_ip}:{nfs_dir}|d' /etc/fstab")
   options="rw,noatime,nodiratime,async"
   line = f"{master_ip}:{nfs_dir} {nfs_dir} nfs {options} 0 0"
-  file_append(cxn, '/etc/fstab', line, use_sudo=True)
+  file_write(cxn, '/etc/fstab', line, append=True, use_sudo=True)
 
 def setup_nfs_server(cxn, ip_prefix):
   install(cxn, 'nfs-kernel-server', 'rpcbind')
@@ -100,7 +105,7 @@ def setup_nfs_server(cxn, ip_prefix):
   cxn.sudo(f"sed -i '\|^{nfs_dir}|d' /etc/exports")
 
   # Now add it
-  file_append(cxn, '/etc/exports', export_line, use_sudo=True)
+  file_write(cxn, '/etc/exports', export_line, append=True, use_sudo=True)
 
   cxn.sudo('exportfs -ra')
   cxn.run('/sbin/showmount -e localhost')
