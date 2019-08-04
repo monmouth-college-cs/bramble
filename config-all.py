@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, os
+import sys, os, glob
 from fabric import Connection
 from fabric import SerialGroup as Group
 from paramiko.ssh_exception import AuthenticationException
@@ -33,11 +33,10 @@ def sudoput(cxn, local_path, remote_path):
   cxn.sudo(f"mv /tmp/sudoput {remote_path}")
 
 def keygen(cxn):
-  # @TODO: Remove this file if it already exists
   cxn.run("mkdir -p ~/.ssh")
-  cxn.run("rm -f ~/.ssh/id.rsa")
-  cxn.run("rm -f ~/.ssh/id-rsa.pub")
+  cxn.run("rm -f ~/.ssh/id.rsa{.pub,}")
   cxn.run('ssh-keygen -f ~/.ssh/id_rsa -t rsa -q -N ""')
+
 # Note that a restart is required after this!
 def set_static_ip(cxn, router, ip_addr):
   # Move over the default /etc/dhcpcd.conf file
@@ -65,7 +64,7 @@ def setup_hostsfile(cxn, data):
 
 def config_cluster_network(group, router, ip_prefix, hostfile_data, local_keyfile):
   os.makedirs('./keyfiles', exist_ok=True)
-  key_files = []
+  public_keys = []
   for i,c in enumerate(group):
     hostname = f"{hostname_prefix}{i+1}"
     set_static_ip(c, router, f"{ip_prefix}.{i+1}")
@@ -73,16 +72,16 @@ def config_cluster_network(group, router, ip_prefix, hostfile_data, local_keyfil
     setup_hostsfile(c, hostfile_data)
     keygen(c)
     c.get('/home/pi/.ssh/id_rsa.pub', f"./keyfiles/{hostname}.pub")
-    with open(f"./keyfiles/{hostname}.pub", 'r') as f:
-      key_files.append(f.read())
-    print(key_files)
 
-  with open("pi_keys.txt") as x:
-    x.write(key_files)
-    # TODO: concatenate alltogether into one file
-    # TODO: Copy file to each pi as authorized keys
-    c.put('~/.ssh/authorized_keys', f"./keyfiles/pi_keys.txt")
+  for keyfile in glob.glob("./keyfiles/*.pub"):
+    with open("./authorized_keys", 'w') as f:
+      f.write(keyfile.read())
+
+
+  for c in group:
+    c.put('./authorized_keys', remote='/home/pi/.ssh/authorized_keys')
     reboot(c)
+
 def setup_nfs_client(cxn, master_ip):
   cxn.sudo(f"umount {nfs_dir}")
   cxn.sudo(f"mount {master_ip}:{nfs_dir} {nfs_dir}")
