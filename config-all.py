@@ -9,8 +9,13 @@ hostname_prefix = 'bramble-pi'
 ip3 = '42' # ip addresses will be "x.x.{ip3}.{num}"
 nfs_dir = '/export/nfs'
 
+# Governor options:
+#  performance: max frequency, no throttling
+#  powersave: min frequency, no throtting
+#  ondemand: throttle frequency based on load
+# There are others, but I don't think we'll need them.
 def set_freq_scaling(cxn, governor):
-  file_write(cxn, '/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor',
+  file_write(cxn, '/sys/devices/system/cpu/cpu*/cpufreq/scaling_governor',
              governor, append=False, use_sudo=True)
 
 def service_cmd(cxn, service, cmd):
