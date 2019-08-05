@@ -1,7 +1,7 @@
 #!/bin/bash
-set -ex
+set -e
 
-prefix=${1:-10.40.20} # First argument: IP address prefix
+prefix=${1:-10.40.42,20} # First argument: IP address prefix
 
 # Second argument: which version Pis to detect
 macaddr=""
