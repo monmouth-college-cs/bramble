@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-import sys, os, glob
+import sys, os, glob, time
 from fabric import Connection
 from fabric import SerialGroup as Group
 from paramiko.ssh_exception import AuthenticationException
 
 # Parameters
 hostname_prefix = 'bramble-pi'
-ip3 = '42' # ip addresses will be "x.x.{ip3}.{num}"
+ip3 = '43' # ip addresses will be "x.x.{ip3}.{num}"
 nfs_dir = '/export/nfs'
 
 # Governor options:
@@ -39,7 +39,9 @@ def sudoput(cxn, local_path, remote_path):
 
 def keygen(cxn):
   cxn.run("mkdir -p ~/.ssh")
-  cxn.run("rm -f ~/.ssh/id.rsa{.pub,}")
+  cxn.sudo("chown pi:pi .ssh")
+  cxn.sudo("chown pi:pi .ssh/*")
+  cxn.run("rm -f ~/.ssh/id_rsa{.pub,}")
   cxn.run('ssh-keygen -f ~/.ssh/id_rsa -t rsa -q -N ""')
 
 # Note that a restart is required after this!
@@ -67,7 +69,7 @@ def setup_hostsfile(cxn, data):
   cxn.sudo(f"sed -i '/{header}/,/{footer}/d' /etc/hosts")
   file_write(cxn, '/etc/hosts', data, append=True, use_sudo=True)
 
-def config_cluster_network(group, router, ip_prefix, hostfile_data, local_keyfile):
+def config_cluster_network(group, router, ip_prefix, hostfile_data):
   os.makedirs('./keyfiles', exist_ok=True)
   public_keys = []
   for i,c in enumerate(group):
@@ -78,17 +80,21 @@ def config_cluster_network(group, router, ip_prefix, hostfile_data, local_keyfil
     keygen(c)
     c.get('/home/pi/.ssh/id_rsa.pub', f"./keyfiles/{hostname}.pub")
 
-  for keyfile in glob.glob("./keyfiles/*.pub"):
-    with open("./authorized_keys", 'w') as f:
-      f.write(keyfile.read())
+    with open("./authorized_keys", 'w') as authorized:
+      for keyfile in glob.glob("./keyfiles/*.pub"):
+        with open(keyfile) as f:
+          authorized.write(f.read())
 
 
   for c in group:
     c.put('./authorized_keys', remote='/home/pi/.ssh/authorized_keys')
     reboot(c)
 
+  print("Network configuration done, waiting for reboot.")
+  time.sleep(60)
+
 def setup_nfs_client(cxn, master_ip):
-  cxn.sudo(f"umount {nfs_dir}")
+  cxn.sudo(f"umount {nfs_dir} || /bin/true")
   cxn.sudo(f"mount {master_ip}:{nfs_dir} {nfs_dir}")
 
   # Set fstab
@@ -118,6 +124,7 @@ def setup_nfs_server(cxn, ip_prefix):
   service_cmd(cxn, 'nfs-common', 'enable')
   service_cmd(cxn, 'rpcbind', 'start')
   service_cmd(cxn, 'nfs-kernel-server', 'start')
+  cxn.sudo('rm -f /lib/systemd/system/nfs-common.service') # "unmask"
   service_cmd(cxn, 'nfs-common', 'start')
 
 def setup_nfs_all(cxn):
@@ -145,16 +152,18 @@ def main():
   print(f"Router IP: {router}")
 
   ip_prefix = '.'.join(router.split('.')[:2]) + f".{ip3}"
-  lines = [f"{ip_prefix}.{i+1}     {hostname_prefix}{i+1}" for i in range(len(bramble))]
+  lines = [f"{ip_prefix}.{i+1}     {hostname_prefix}{i+1}" for i in range(len(ips))]
   lines.insert(0, '# Bramble')
   lines.insert(0, '')
   hostfile_data = '\n'.join(lines)
 
-  local_keyfile = None if len(sys.argv) == 1 else sys.argv[1]
-
-  #config_cluster_network(bramble, router, ip_prefix, hostfile_data, local_keyfile)
+  config_cluster_network(bramble, router, ip_prefix, hostfile_data)
+  new_ips = [f"{ip_prefix}.{i+1}" for i in range(len(ips))]
+  bramble = Group(*new_ips, user='pi', connect_kwargs=cxn_args)
   setup_nfs(bramble, ip_prefix)
 
+  for c in bramble:
+    reboot(c)
 
 if __name__ == "__main__":
   main()
