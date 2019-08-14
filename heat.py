@@ -41,9 +41,9 @@ def prepare(group, fw):
 def run(group, fw):
     prepare(group, fw)
     for c in group:
-        result = c.sudo(f"{fwdir}/vl805", hide='both')
-        actual_fw = result.stdout.split(':')[-1].strip()[2:]
+        actual_fw = get_firmware(c)
         assert actual_fw == fw
+    print(f"Running {exp_script} {fw} {cooltype}")
     group.run(f"{exp_script} {fw} {cooltype}", hide='both')
 
 def gather_results(group):
@@ -52,7 +52,7 @@ def gather_results(group):
         # c.get("*.log", "./output/")
         # TODO: write helper function that can actually handle it
         # For now you'll have to manually input the Pi's password when it asks for it
-        os.system(f"scp pi@{c.host}:/home/pi/*.log f{output_dir}/")
+        os.system(f"scp pi@{c.host}:/home/pi/*.log {output_dir}/")
 
 test_connections(bramble)
 setup(bramble)

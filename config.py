@@ -43,14 +43,13 @@ def service_cmd(cxn, service, cmd):
   cxn.sudo(f"systemctl {cmd} {service}")
 
 def install(cxn, *pkg):
-  cxn.sudo(f"apt install {' '.join(pkg)} -y")
+  cxn.sudo(f"apt-get install {' '.join(pkg)} -y")
 
 def remove(cxn, *pkg):
-  cxn.sudo(f"apt remove {' '.join(pkg)} -y")
+  cxn.sudo(f"apt-get remove {' '.join(pkg)} -y")
 
 def setup_mpi(cxn):
-  cxn.install(cxn, ['openmpi-common', 'openmpi-bin', 'libopenmpi-dev'])
-  cxn.remove(cxn, ['libblas-dev', 'libblas3'])
+  install(cxn, 'openmpi-common', 'openmpi-bin', 'libopenmpi-dev')
 
 def file_write(cxn, filepath, data, append=True, use_sudo=False):
   flags = "-a" if append else ""
@@ -112,7 +111,9 @@ def config_cluster_network(group, router, ip_prefix, reboot_now=False):
     setup_hostsfile(c, hostfile_data)
     keygen(c)
     c.get('/home/pi/.ssh/id_rsa.pub', f"./keyfiles/{hostname}.pub")
-
+    
+  # @TODO: also create known_hosts files...otherwise we have to ssh
+  # into each machine from the master before MPI will work.
   with open("./authorized_keys", 'w') as authorized:
     for keyfile in glob.glob("./keyfiles/*.pub"):
       with open(keyfile) as f:
@@ -128,8 +129,7 @@ def config_cluster_network(group, router, ip_prefix, reboot_now=False):
     time.sleep(60*5)
 
 def setup_nfs_client(cxn, master_ip):
-  cxn.sudo(f"umount -q {nfs_dir}")
-  cxn.sudo(f"rm -rf {nfs_dir}")
+  print(f"Setting up nfs client on {cxn.host}")
   cxn.sudo(f"mount {master_ip}:{nfs_dir} {nfs_dir}")
 
   # Set fstab
@@ -139,10 +139,11 @@ def setup_nfs_client(cxn, master_ip):
   file_write(cxn, '/etc/fstab', line, append=True, use_sudo=True)
 
 def setup_nfs_server(cxn, ip_prefix):
+  print(f"Setting up NFS server on {cxn.host}")
   install(cxn, 'nfs-kernel-server', 'rpcbind')
 
   # Need to add line in /etc/exports
-  # Replace the ip address range with * for open access
+  # Use * or {ip_prefix}.0 before the /24 depending on whether you want open or restricted access.
   options = "rw,all_squash,insecure,async,no_subtree_check,anonuid=1000,anongid=1000"
   export_line = f"{nfs_dir} {ip_prefix}.0/24({options})"
 
@@ -163,7 +164,9 @@ def setup_nfs_server(cxn, ip_prefix):
   service_cmd(cxn, 'nfs-common', 'start')
 
 def setup_nfs_all(cxn):
-  cxn.sudo('apt install nfs-common -y')
+  install(cxn, 'nfs-common')
+  cxn.sudo(f"rm -rf {nfs_dir}/*")
+  cxn.sudo(f"umount -q {nfs_dir}", warn=True)
   cxn.sudo(f"mkdir -p {nfs_dir}")
   cxn.sudo(f"chown pi:pi {nfs_dir}")
   cxn.sudo(f"chmod 755 {nfs_dir}")
@@ -177,25 +180,22 @@ def setup_nfs(group, ip_prefix):
     setup_nfs_client(c, master.host)
 
 def get_firmware(cxn):
-  cxn.sudo(f"{fwdir}/vl805")
+  result = cxn.sudo(f"{fwdir}/vl805", hide='both')
+  return result.stdout.split(':')[-1].strip()[2:]
 
 @requires_reboot
 def set_firmware(cxn, version):
   cxn.sudo(f"{fwdir}/vl805 -w {fwdir}/vl805_fw_{version}.bin")
 
-def setup_firmware(cxn):
+@requires_reboot
+def update_firmware(cxn):
   cxn.run(f"rm -rf {fwdir}")
   cxn.run(f"mkdir -p {fwdir}")
   filename = f"vl805_update_{newfw}.zip"
   cxn.put(f"./data/{filename}", remote=f'{fwdir}/{filename}')
   cxn.run(f"cd {fwdir} && unzip {filename} && chmod a+x vl805")
-
-@requires_reboot
-def update_firmware(cxn):
-  setup_firmware(cxn)
-  set_firmware(cxn, newfw) 
-  get_firmware(cxn)
-
+  set_firmware(cxn, newfw)
+  
 def set_locale(cxn, lang):
   # Unfortunately, this doesn't seem to work, or maybe it requires a reboot.
   raspi_config(cxn, "do_change_locale", lang)
@@ -216,12 +216,14 @@ def set_locale(cxn, lang):
 def initial_config(cxn):
   cxn.sudo("apt update --fix-missing -y")
   cxn.sudo("apt upgrade -y")
+  cxn.sudo("apt-get autoremove -y")
   install(cxn, base_packages)
   raspi_config(cxn, "do_expand_rootfs")
   raspi_config(cxn, "do_memory_split", "16") # only use 16MB for GPU
   set_locale(cxn, "en_US.UTF-8")
   raspi_config(cxn, "do_configure_keyboard", "us")
   cxn.sudo("timedatectl set-timezone US/Central") # I don't know how to do this with raspi-config
+  cxn.run("tvservice -o") # turn off HDMI, not sure if this helps if HDMI not connected...
   update_firmware(cxn)
 
 def get_ip_info(group):
