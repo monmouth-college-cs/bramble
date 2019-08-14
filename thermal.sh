@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
-clear
 
 # Fill these in with the right values before running (no spaces)
-fwtype=newfw
-cooltype=poe
+fwtype=${1:-unknownfw}
+cooltype=${2:-unknowncool}
 
+HOSTNAME=$(hostname)
 TIMESTAMP=$(date +"%Y-%m-%d-%H-%M")
 TIME="time"
 TIMEFORMAT="%2R"
@@ -53,6 +53,10 @@ thermal_mem () {
     printf "Final temp: $(gettemp)\n"
 }
 
-thermal_cpu 2>&1 | tee thermal-${fwtype}-${cooltype}-cpu-${TIMESTAMP}.log
-sleep 10m # let the pi cooldown
-thermal_mem 2>&1 | tee thermal-${fwtype}-${cooltype}-mem-${TIMESTAMP}.log
+# thermal_cpu 2>&1 | tee thermal-${fwtype}-${cooltype}-cpu-${TIMESTAMP}.log
+# sleep 10m # let the pi cooldown
+# thermal_mem 2>&1 | tee thermal-${fwtype}-${cooltype}-mem-${TIMESTAMP}.log
+
+ls > thermal-${HOSTNAME}-${fwtype}-${cooltype}-cpu-${TIMESTAMP}.log
+sleep 1s
+ls > thermal-${HOSTNAME}-${fwtype}-${cooltype}-mem-${TIMESTAMP}.log
