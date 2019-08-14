@@ -28,7 +28,7 @@ def requires_reboot(func):
   return wrapper
 
 def raspi_config(cxn, op, value=""):
-  cxn.sudo(f"raspi-config nonint {op} {value}")
+ cxn.sudo(f"raspi-config nonint {op} {value}")
 
 # Governor options:
 #  performance: max frequency, no throttling
@@ -187,10 +187,10 @@ def set_firmware(cxn, version):
 def update_firmware(cxn):
   cxn.run(f"rm -rf {fwdir}")
   cxn.run(f"mkdir -p {fwdir}")
-  filename = f"vl805_update_{newfw}.zip"
+  filename = f"vl805_update_{oldfw}.zip" ##CHANGE TO OLD##
   cxn.put(f"./data/{filename}", remote=f'{fwdir}/{filename}')
   cxn.run(f"cd {fwdir} && unzip {filename} && chmod a+x vl805")
-  set_firmware(cxn, newfw)
+  set_firmware(cxn, oldfw) 
   get_firmware(cxn)
 
 def set_locale(cxn, lang):
@@ -260,6 +260,10 @@ def main(network, init, nfs, mpi):
     for c in bramble:
       setup_mpi(c)
 
+  if firmware:
+    for c in bramble:
+      update_firmware(c)
+
   print("All done, restarting")
   # for c in bramble:
   #   reboot(c)
@@ -273,6 +277,7 @@ if __name__ == "__main__":
   parser.add_argument("-f", "--nfs", action="store_true")
   parser.add_argument("-m", "--mpi", action="store_true")
   parser.add_argument("-a", "--all", action="store_true", dest='configall')
+  parser.add_arguement("-s","--firmware", action="store_true")
   args = parser.parse_args()
 
   if args.configall:
