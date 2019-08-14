@@ -10,7 +10,7 @@ ip3 = '42' # ip addresses will be "x.x.{ip3}.{num}"
 nfs_dir = '/export/nfs'
 Group = SerialGroup # Use Serial for debugging
 fwdir = '/home/pi/firmware'
-oldfw = '013707'
+oldfw = '013701'
 newfw = '0137a8'
 base_packages = ['emacs', 'iperf']
 
@@ -183,14 +183,17 @@ def get_firmware(cxn):
 def set_firmware(cxn, version):
   cxn.sudo(f"{fwdir}/vl805 -w {fwdir}/vl805_fw_{version}.bin")
 
-@requires_reboot
-def update_firmware(cxn):
+def setup_firmware(cxn):
   cxn.run(f"rm -rf {fwdir}")
   cxn.run(f"mkdir -p {fwdir}")
-  filename = f"vl805_update_{oldfw}.zip" ##CHANGE TO OLD##
+  filename = f"vl805_update_{newfw}.zip"
   cxn.put(f"./data/{filename}", remote=f'{fwdir}/{filename}')
   cxn.run(f"cd {fwdir} && unzip {filename} && chmod a+x vl805")
-  set_firmware(cxn, oldfw) 
+
+@requires_reboot
+def update_firmware(cxn):
+  setup_firmware(cxn)
+  set_firmware(cxn, newfw) 
   get_firmware(cxn)
 
 def set_locale(cxn, lang):
@@ -226,7 +229,14 @@ def get_ip_info(group):
   ip_prefix = '.'.join(router.split('.')[:2]) + f".{ip3}"
   return router, ip_prefix
 
+def test_connections(group):
+  for c in group:
+    print(f"Test connection to {c.host}: ", end='')
+    result = c.run('hostname', hide='both')
+    print(result.stdout, end='')
+
 def main(network, init, nfs, mpi):
+  reboot_required = False
   with open('hosts.txt') as f:
     ips = [line.strip() for line in f]
   cxn_args = {'password': 'raspberry'}
@@ -235,10 +245,7 @@ def main(network, init, nfs, mpi):
   ip_prefix = '.'.join(router.split('.')[:2]) + f".{ip3}"
 
   print(f"Bramble config. IP prefix: {ip_prefix}")
-  for c in bramble:
-    print(f"Test connection to {c.host}: ", end='')
-    result = c.run('hostname', hide='both')
-    print(result.stdout)
+  test_connections(group)
 
   if network:
     print(f"Begin network config. Router IP: {router}")
@@ -247,11 +254,13 @@ def main(network, init, nfs, mpi):
     bramble = Group(*new_ips, user='pi', connect_kwargs=cxn_args)
 
   if init:
+    reboot_required = True
     print("Initial raspi-config")
     for c in bramble:
       initial_config(c)
 
   if nfs:
+    reboot_required = True
     print("Setup NFS")
     setup_nfs(bramble, ip_prefix)
 
@@ -260,13 +269,10 @@ def main(network, init, nfs, mpi):
     for c in bramble:
       setup_mpi(c)
 
-  if firmware:
-    for c in bramble:
-      update_firmware(c)
-
   print("All done, restarting")
-  # for c in bramble:
-  #   reboot(c)
+  if reboot_required:
+    for c in bramble:
+      reboot(c)
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
@@ -277,7 +283,6 @@ if __name__ == "__main__":
   parser.add_argument("-f", "--nfs", action="store_true")
   parser.add_argument("-m", "--mpi", action="store_true")
   parser.add_argument("-a", "--all", action="store_true", dest='configall')
-  parser.add_arguement("-s","--firmware", action="store_true")
   args = parser.parse_args()
 
   if args.configall:
