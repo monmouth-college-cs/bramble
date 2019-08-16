@@ -187,13 +187,16 @@ def get_firmware(cxn):
 def set_firmware(cxn, version):
   cxn.sudo(f"{fwdir}/vl805 -w {fwdir}/vl805_fw_{version}.bin")
 
-@requires_reboot
-def update_firmware(cxn):
+def setup_firmware(cxn):
   cxn.run(f"rm -rf {fwdir}")
   cxn.run(f"mkdir -p {fwdir}")
   filename = f"vl805_update_{newfw}.zip"
   cxn.put(f"./data/{filename}", remote=f'{fwdir}/{filename}')
   cxn.run(f"cd {fwdir} && unzip {filename} && chmod a+x vl805")
+
+@requires_reboot
+def update_firmware(cxn):
+  setup_firmware(cxn)
   set_firmware(cxn, newfw)
   
 def set_locale(cxn, lang):

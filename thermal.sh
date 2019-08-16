@@ -53,10 +53,6 @@ thermal_mem () {
     printf "Final temp: $(gettemp)\n"
 }
 
-# thermal_cpu 2>&1 | tee thermal-${fwtype}-${cooltype}-cpu-${TIMESTAMP}.log
-# sleep 10m # let the pi cooldown
-# thermal_mem 2>&1 | tee thermal-${fwtype}-${cooltype}-mem-${TIMESTAMP}.log
-
-ls > thermal-${HOSTNAME}-${fwtype}-${cooltype}-cpu-${TIMESTAMP}.log
-sleep 1s
-ls > thermal-${HOSTNAME}-${fwtype}-${cooltype}-mem-${TIMESTAMP}.log
+thermal_cpu 2>&1 | tee thermal-cpu-$(hostname)-${fwtype}-${cooltype}-${TIMESTAMP}.log
+sleep 10m # let the pi cooldown
+thermal_mem 2>&1 | tee thermal-mem-$(hostname)-${fwtype}-${cooltype}-${TIMESTAMP}.log
