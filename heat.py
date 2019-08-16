@@ -21,6 +21,7 @@ bramble = ThreadingGroup(*ips, user='pi', connect_kwargs=cxn_args)
 def one_time_setup(group):
     os.makedirs(output_dir, exist_ok=True)
     for c in group:
+        install(c, 'sysbench')
         setup_firmware(c)
 
 # Careful with this. I still get occassional errors where a Pi won't
