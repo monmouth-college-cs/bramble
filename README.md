@@ -1,6 +1,12 @@
 # Rasperry Pi 4 Bramble
 
-All the scripts and code for our SOfIA 2019 project on cluster computing.
+All the scripts and code for our SOfIA 2019 project on cluster
+computing. We created a cluster computing out of 8 Raspberry Pi
+4s. The Raspberry Pi 4 has 4 cores and, from what I can tell, the ARM
+Cortex-A72 chip can execute 2 double-precision floating-point
+operations per cycle (8 for single-precision). The chip runs at 1.5
+GHz (although it can be overclocked). Thus peak FLOPS is 4 *
+1.5x10^9 * 2 = 12 GFLOPS.
 
 ## Running High-Performance Linpack
 
