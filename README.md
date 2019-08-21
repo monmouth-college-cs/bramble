@@ -119,9 +119,10 @@ Tuning details can be found [here](http://www.netlib.org/benchmark/hpl/tuning.ht
 
 Problem Sizes: 8 nodes with 2 GB memory each = 16 GB = 2^4 x 2^30 = 2^34 bytes
 double precision = 8 bytes = 2^3
-Total problem size available: 2^34 / 2^3 = 2^31 \approx 2 billion
+So we can hold 2^34 / 2^3 = 2^31 \approx 2 billion elements in memory
 Use only 80% (save for OS): about 1.7 million
-Pick a few sizes around these to optimize
+Square root of this to get problem size (matrices): (sqrt (* 0.8 (expt 2 31)))41448.60574735898
+But it seems the process gets killed with 40960...
 
 Block size: try out some in 32..256 range: 32 64 128 256
 

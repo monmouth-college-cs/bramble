@@ -1,13 +1,14 @@
 #!/bin/bash
 set -e
-clear
 
 # Fill these in with the right values before running (no spaces)
-fwtype=newfw
-cooltype=poe
+fwtype=${1:-unknownfw}
+cooltype=${2:-unknowncool}
 
-TIME=/usr/bin/time
-TIMECMD="${TIME} -f '%e'"
+HOSTNAME=$(hostname)
+TIMESTAMP=$(date +"%Y-%m-%d-%H-%M")
+TIME="time"
+TIMEFORMAT="%2R"
 
 gettemp() {
     vcgencmd measure_temp | cut -d= -f2 | tr -d "\n'C"
@@ -18,11 +19,12 @@ thermal_cpu () {
     local iter=${2:-8}
     
     printf -- "----- Thermal Test (CPU) -----\n"
-    
-    for i in {1..$iter}; do
+
+    local i=0
+    for ((i=0; i < ${iter}; i++)); do
         gettemp
         printf ","
-        ${TIMECMD} sysbench --test=cpu --cpu-max-prime=$maxprime \
+        time sysbench --test=cpu --cpu-max-prime=$maxprime \
                    --num-threads=4 \run >/dev/null
     done
     printf "Final temp: $(gettemp)\n"
@@ -30,9 +32,8 @@ thermal_cpu () {
 
 thermal_mem_base () {
     local memsize=${1:-3G}
-    local iter=${2:-10}
 
-    for i in {1..$iter}; do
+    for ((j=0; j < 10; j++)); do
         sysbench --num-threads=4 --validate=on --test=memory \
                  --memory-block-size=1K --memory-total-size=$memsize \
                  run >/dev/null
@@ -43,14 +44,15 @@ thermal_mem () {
     local memsize=${1:-3G}
     local iter=${2:-10}
 
-    printf -- "----- Thermal Test (MEM) -----\n"
-    for i in {1..$iter}; do
+    printf -- "----- Thermal Test (MEM) ----- \n"
+    for ((i=0; i < ${iter}; i++)); do
         gettemp
         printf ","
-        ${TIMECMD} thermal_mem_base $memsize $iter
+        time thermal_mem_base $memsize
+    done
     printf "Final temp: $(gettemp)\n"
 }
 
-thermal_cpu 500 5 2>&1 | tee thermal-${fwtype}-${cooltype}-cpu.log
+thermal_cpu 2>&1 | tee thermal-cpu-$(hostname)-${fwtype}-${cooltype}-${TIMESTAMP}.log
 sleep 10m # let the pi cooldown
-thermal_mem 1M 3 2>&1 | tee thermal-${fwtype}-${cooltype}-mem.log
+thermal_mem 2>&1 | tee thermal-mem-$(hostname)-${fwtype}-${cooltype}-${TIMESTAMP}.log
